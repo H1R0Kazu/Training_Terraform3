@@ -1,6 +1,5 @@
 locals {
-  # Prefix List Entries - 30 entries to test Security Group rule limit (60)
-  # Total rules will be 30 entries × 3 rules = 90 rules (exceeds AWS limit of 60)
+  # Prefix List Entries - 30 entries to test capacity limit with aws_security_group_rule
   prefix_list_entries = [
     for i in range(1, 31) : {
       cidr        = "10.0.${i}.0/24"

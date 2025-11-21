@@ -202,3 +202,12 @@ Security Group Capacity = Number of Rules × Prefix List MaxEntries
 - Current setup (3 rules × MaxEntries=10): Balanced configuration with room for growth
 
 **Recommendation:** When designing security groups with Prefix Lists, always ensure `(number of rules) × (max_entries) ≤ 60`
+
+### Verification: Resource Type Independence
+
+**Testing confirmed that this capacity limit is NOT dependent on Terraform resource type:**
+
+- ✅ Tested with `aws_vpc_security_group_ingress_rule` (new type): Same error
+- ✅ Tested with `aws_security_group_rule` (legacy type): Same error
+
+**Conclusion:** The capacity calculation is performed by AWS at the Security Group level, not by Terraform. Both new and legacy resource types are subject to the same 60 rule/capacity limit. Choose your resource type based on code maintainability and AWS provider best practices, not capacity considerations
