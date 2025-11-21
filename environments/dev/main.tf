@@ -2,7 +2,7 @@
 resource "aws_ec2_managed_prefix_list" "test_miyata" {
   name           = "test-miyata-prefix-list"
   address_family = "IPv4"
-  max_entries    = 10
+  max_entries    = 50
 
   dynamic "entry" {
     for_each = local.prefix_list_entries
