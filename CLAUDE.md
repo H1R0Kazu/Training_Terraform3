@@ -104,6 +104,7 @@ aws_vpc_security_group_egress_rule.allow_all (Single egress rule - allow all)
 ### Prefix List Configuration
 
 - **Name**: `test-miyata-prefix-list`
+- **Resource ID**: `pl-026264adbef1f2da0`
 - **Address Family**: IPv4
 - **Max Entries**: 10
 - **Current Entries**: 5 (manually defined in locals)
@@ -117,12 +118,23 @@ aws_vpc_security_group_egress_rule.allow_all (Single egress rule - allow all)
 ### Security Group Configuration
 
 - **Name**: `test-sg-with-prefix-list`
-- **VPC**: Existing "udemy" VPC
+- **Resource ID**: `sg-0b04a69009c80dd71`
+- **VPC**: Existing "udemy" VPC (`vpc-026cf542cccbb039e`)
 - **Ingress Rules**: 3 rules (HTTPS/443, HTTP/80, SSH/22) referencing the prefix list
 - **Egress Rules**: 1 rule (allow all outbound traffic)
 - **Resource Types**: Uses AWS Provider 5.0+ new resource types
   - `aws_vpc_security_group_ingress_rule`
   - `aws_vpc_security_group_egress_rule`
+
+### Current Security Group Rule IDs
+
+Created with new resource types (as of 2025-11-21):
+
+- **Egress Rule**: `sgr-0d3e635e3980a0033` - Allow all outbound traffic
+- **Ingress Rules**:
+  - `sgr-0ef793c82f0c0df96` - HTTPS (443/tcp) from prefix list
+  - `sgr-011fb2caf33e7dd1b` - HTTP (80/tcp) from prefix list
+  - `sgr-07a27dcf3d05111a7` - SSH (22/tcp) from prefix list
 
 ## New Resource Types (AWS Provider 5.0+)
 
