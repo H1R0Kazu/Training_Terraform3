@@ -1,0 +1,80 @@
+# Terraform Apply Error Log - Prefix List Capacity Limit (Legacy Resource Type)
+# Date: 2025-11-21
+# Command: terraform apply -auto-approve
+# Resource Type: aws_security_group_rule (legacy)
+# Error: Unable to increase Prefix List MaxEntries due to Security Group capacity
+
+╷
+│ Error: updating EC2 Managed Prefix List (pl-026264adbef1f2da0) increased MaxEntries : waiting for EC2 Managed Prefix List (pl-026264adbef1f2da0) MaxEntries update: unexpected state 'modify-failed', wanted target 'modify-complete'. last error: Unable to modify maximum entries from (10) to (50). The following VPC Security Group resources do not have sufficient capacity [sg-0b04a69009c80dd71].
+│
+│
+│   with aws_ec2_managed_prefix_list.test_miyata,
+│   on main.tf line 2, in resource "aws_ec2_managed_prefix_list" "test_miyata":
+│    2: resource "aws_ec2_managed_prefix_list" "test_miyata" {
+│
+╵
+
+## Verification Context
+
+This error occurred when using **legacy resource type** `aws_security_group_rule`, as part of a verification to confirm whether the capacity limit is dependent on the Terraform resource type.
+
+**Resources Used:**
+- aws_security_group_rule.ingress_from_prefix_list (legacy type)
+- aws_security_group_rule.egress_all (legacy type)
+
+**Previous Test:**
+- Used new resource types: aws_vpc_security_group_ingress_rule / aws_vpc_security_group_egress_rule
+- Result: Same error occurred
+
+## Error Analysis
+
+**Resource:** aws_ec2_managed_prefix_list.test_miyata
+**Resource ID:** pl-026264adbef1f2da0
+**Location:** main.tf line 2
+
+**Error Type:** Capacity constraint violation
+
+**What happened:**
+Attempted to increase Prefix List max_entries from 10 to 50 using legacy aws_security_group_rule resource type. The operation failed with the exact same error as when using new resource types.
+
+**Configuration:**
+  - Security Group Rules: 3 ingress + 1 egress (legacy aws_security_group_rule)
+  - Current MaxEntries: 10
+  - Current Capacity: 3 × 10 = 30 ✅
+  - Attempted MaxEntries: 50
+  - Required Capacity: 3 × 50 = 150 ❌
+
+AWS Limit: 60 rules/capacity per security group
+
+## Critical Finding
+
+**The capacity limit is NOT dependent on Terraform resource type.**
+
+Both resource types result in the same error:
+1. New types (aws_vpc_security_group_ingress_rule / aws_vpc_security_group_egress_rule): ❌ Error
+2. Legacy type (aws_security_group_rule): ❌ Same Error
+
+**Conclusion:**
+The 60 rule/capacity limit is an AWS Security Group limitation, not a Terraform provider or resource type limitation. The capacity calculation formula applies regardless of which Terraform resource type is used to manage the rules.
+
+## Capacity Calculation (AWS Level)
+
+```
+Security Group Capacity = Number of Rules × Prefix List MaxEntries
+```
+
+This calculation is performed by AWS, not by Terraform, and applies to the Security Group itself regardless of how the rules are managed.
+
+## Affected Resources
+
+- Prefix List: pl-026264adbef1f2da0 (test-miyata-prefix-list)
+- Security Group: sg-0b04a69009c80dd71 (test-sg-with-prefix-list)
+- VPC: vpc-026cf542cccbb039e (udemy)
+- Security Group Rules: Using legacy aws_security_group_rule type
+
+## Resolution
+
+The solution remains the same regardless of resource type:
+1. Reduce the number of rules referencing the Prefix List
+2. Keep MaxEntries at 10 or lower
+3. Design the architecture to stay within: (number of rules) × (max_entries) ≤ 60

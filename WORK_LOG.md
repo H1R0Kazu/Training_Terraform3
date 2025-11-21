@@ -367,6 +367,91 @@ The following VPC Security Group resources do not have sufficient capacity [sg-0
 
 今回の検証では、現在の設定（MaxEntries=10、5エントリ）を維持することにしました。
 
+### 7. リソースタイプ依存性の検証（2025-11-21）
+
+容量制限がTerraformのリソースタイプに依存するかを検証するため、旧リソースタイプ（`aws_security_group_rule`）で同じテストを実施しました。
+
+#### 検証目的
+
+新しいリソースタイプ（`aws_vpc_security_group_ingress_rule`/`aws_vpc_security_group_egress_rule`）で発生した容量制限エラーが、旧リソースタイプ（`aws_security_group_rule`）でも同様に発生するかを確認。
+
+#### 実施内容
+
+**ステップ1: リソースタイプの変更**
+
+1. 新リソースタイプのルールをすべて削除（terraform apply）
+2. `security_group.tf`を旧リソースタイプに変更
+3. 旧リソースタイプでルールを再作成（terraform apply）
+
+**変更前（新リソースタイプ）:**
+```hcl
+resource "aws_vpc_security_group_ingress_rule" "from_prefix_list" {
+  security_group_id = aws_security_group.test_with_prefix_list.id
+  ip_protocol       = each.value.protocol
+  prefix_list_id    = aws_ec2_managed_prefix_list.test_miyata.id
+  ...
+}
+```
+
+**変更後（旧リソースタイプ）:**
+```hcl
+resource "aws_security_group_rule" "ingress_from_prefix_list" {
+  type            = "ingress"
+  protocol        = each.value.protocol
+  prefix_list_ids = [aws_ec2_managed_prefix_list.test_miyata.id]
+  ...
+}
+```
+
+**作成されたルール（旧タイプ）:**
+- `aws_security_group_rule.ingress_from_prefix_list["0"]` - ID: sgrule-2363168827 (HTTPS/443)
+- `aws_security_group_rule.ingress_from_prefix_list["1"]` - ID: sgrule-1817352344 (HTTP/80)
+- `aws_security_group_rule.ingress_from_prefix_list["2"]` - ID: sgrule-3984986704 (SSH/22)
+- `aws_security_group_rule.egress_all` - ID: sgrule-235794544
+
+**ステップ2: 容量制限テスト**
+
+旧リソースタイプのルールが作成された状態で、Prefix ListのMaxEntriesを10から50に増やす操作を実施。
+
+```bash
+terraform apply -auto-approve
+```
+
+#### 結果
+
+**同じエラーが発生:**
+
+```
+Error: Unable to modify maximum entries from (10) to (50).
+The following VPC Security Group resources do not have sufficient capacity [sg-0b04a69009c80dd71].
+```
+
+#### 重要な発見
+
+**容量制限はTerraformのリソースタイプに依存しない**
+
+| リソースタイプ | MaxEntries 10→50 | 結果 |
+|-------------|-----------------|------|
+| 新タイプ (`aws_vpc_security_group_ingress_rule`) | 3ルール × 50 = 150容量 | ❌ エラー |
+| 旧タイプ (`aws_security_group_rule`) | 3ルール × 50 = 150容量 | ❌ 同じエラー |
+
+#### 結論
+
+1. **AWS側の制限**: 容量制限はAWSのセキュリティグループレベルで適用される制限であり、Terraformのリソースタイプとは無関係
+
+2. **容量計算はAWSが実施**: `ルール数 × MaxEntries ≤ 60`の計算は、AWS側でセキュリティグループに対して行われる
+
+3. **リソースタイプの選択は影響しない**: 新旧どちらのリソースタイプを使用しても、同じ60ルール/容量制限が適用される
+
+4. **設計上の考慮点は変わらない**: どちらのリソースタイプを使用する場合でも、Prefix Listを参照するルール数とMaxEntriesの積を60以下に保つ必要がある
+
+#### 追加のエラーログ
+
+詳細なエラーログは以下に保存:
+- `error_logs/prefix_list_capacity_error_legacy_resource.log`
+
+この検証により、容量制限がAWSインフラストラクチャレベルの制約であり、Terraformのリソースタイプの選択には依存しないことが確認されました。
+
 ## 今後の拡張案
 
 - [ ] 他の環境（staging, prod）への展開
