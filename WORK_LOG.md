@@ -290,6 +290,83 @@ terraform apply  # 実行
 - Ingress (HTTP/80): `sgr-011fb2caf33e7dd1b`
 - Ingress (SSH/22): `sgr-07a27dcf3d05111a7`
 
+### 6. Prefix List容量制限の検証（2025-11-21）
+
+セキュリティグループの60ルール制限を検証するため、Prefix Listのエントリ数を増やそうとしたところ、重要な発見がありました。
+
+#### 試行内容
+
+Prefix Listのエントリ数を5個から30個に増やし、セキュリティグループルールの容量制限を検証。
+
+**変更内容:**
+- `locals.tf`: prefix_list_entriesを30エントリに変更（動的生成）
+- `main.tf`: max_entriesを10から50に変更
+
+**期待していた動作:**
+- Prefix Listの実際のエントリ数が30なので問題ないと予想
+- セキュリティグループルールは3つ（HTTPS, HTTP, SSH）のまま
+
+#### エラー発生
+
+```bash
+terraform apply -auto-approve
+```
+
+**エラー内容:**
+
+```
+Error: updating EC2 Managed Prefix List (pl-026264adbef1f2da0) increased MaxEntries:
+waiting for EC2 Managed Prefix List (pl-026264adbef1f2da0) MaxEntries update:
+unexpected state 'modify-failed', wanted target 'modify-complete'.
+last error: Unable to modify maximum entries from (10) to (50).
+The following VPC Security Group resources do not have sufficient capacity [sg-0b04a69009c80dd71].
+```
+
+#### 重要な発見
+
+**Prefix Listを参照するセキュリティグループの容量計算方式:**
+
+```
+セキュリティグループ容量 = ルール数 × Prefix ListのMaxEntries
+```
+
+**現在の構成:**
+- セキュリティグループルール: 3個（HTTPS/443、HTTP/80、SSH/22）
+- Prefix List MaxEntries: 10
+- **消費容量**: 3 × 10 = **30**
+- 状態: ✅ 60ルール制限以内（問題なし）
+
+**試行した構成:**
+- セキュリティグループルール: 3個（同じ）
+- Prefix List MaxEntries: 50
+- **必要容量**: 3 × 50 = **150**
+- 状態: ❌ 60ルール制限を超過（エラー）
+
+#### 結論
+
+1. **実際のエントリ数ではなくMaxEntriesが重要**: Prefix Listの実際のエントリ数が30であっても、`max_entries`が50であれば、容量計算には50が使用される
+
+2. **容量計算式**: `ルール数 × MaxEntries ≤ 60`を満たす必要がある
+
+3. **設計上の制約**:
+   - 3つのルールでPrefix Listを参照する場合、MaxEntriesは最大20まで（3 × 20 = 60）
+   - MaxEntries=50を使用する場合、Prefix Listを参照できるルールは1つまで（1 × 50 = 50）
+
+4. **Prefix Listの利点と制限のトレードオフ**:
+   - Prefix Listを使うことでIPアドレス管理は簡素化できる
+   - しかし、MaxEntriesの設定により、セキュリティグループの容量を大きく消費する可能性がある
+   - 設計時にはルール数とMaxEntriesの積を考慮する必要がある
+
+#### 対応方針
+
+この検証により、以下の設計原則が明確になりました：
+
+- **少数のルールで多数のIP**: Prefix Listを1つのルールだけで参照し、MaxEntriesを大きく設定
+- **多数のルールで少数のIP**: 複数のルールでPrefix Listを参照する場合、MaxEntriesは小さめに設定
+- **バランス型**: 現在の構成（3ルール × MaxEntries=10）は適度なバランス
+
+今回の検証では、現在の設定（MaxEntries=10、5エントリ）を維持することにしました。
+
 ## 今後の拡張案
 
 - [ ] 他の環境（staging, prod）への展開

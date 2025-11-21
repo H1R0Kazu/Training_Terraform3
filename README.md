@@ -16,6 +16,28 @@ AWS Managed Prefix Listを使用したセキュリティグループの作成と
   - `aws_vpc_security_group_ingress_rule`
   - `aws_vpc_security_group_egress_rule`
 
+### 重要な発見：Prefix List容量制限
+
+**Prefix Listを参照するセキュリティグループの容量計算：**
+
+```
+セキュリティグループ容量 = ルール数 × Prefix ListのMaxEntries
+```
+
+**検証結果：**
+- 現在の構成: 3ルール × 10 MaxEntries = 30容量（問題なし）
+- 試行した構成: 3ルール × 50 MaxEntries = 150容量（**失敗**）
+- **AWS制限**: セキュリティグループあたり60ルール/容量
+
+Prefix Listの`max_entries`を10から50に増やそうとしたところ、以下のエラーが発生：
+
+```
+Error: Unable to modify maximum entries from (10) to (50).
+The following VPC Security Group resources do not have sufficient capacity [sg-0b04a69009c80dd71].
+```
+
+**結論：** Prefix Listを使用する場合、実際のエントリ数ではなく`max_entries`の値がセキュリティグループの容量に影響する。Prefix Listを参照するルール数と`max_entries`の積がAWSの60ルール制限を超えないよう設計する必要がある。
+
 ## ディレクトリ構造
 
 ```text

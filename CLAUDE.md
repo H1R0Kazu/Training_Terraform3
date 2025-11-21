@@ -174,3 +174,31 @@ resource "aws_vpc_security_group_ingress_rule" "example" {
 - **Do not mix inline rules with standalone rule resources**: If using `aws_vpc_security_group_ingress_rule` or `aws_vpc_security_group_egress_rule`, do NOT use inline `ingress {}` or `egress {}` blocks in the `aws_security_group` resource
 - **Security group must exist first**: The security group resource must be created before the rule resources can reference it
 - **Prefix list must exist first**: The prefix list must be created before security group rules can reference it
+
+### Critical: Prefix List Capacity Calculation
+
+**When a security group references a Prefix List, AWS calculates capacity as:**
+
+```
+Security Group Capacity = Number of Rules × Prefix List MaxEntries
+```
+
+**Important points:**
+
+- The capacity is calculated using `max_entries` (not the actual number of entries)
+- AWS enforces a limit of **60 rules per security group**
+- This limit applies to the calculated capacity when using Prefix Lists
+
+**Example from this project:**
+
+- Current configuration: 3 rules × 10 MaxEntries = **30 capacity** ✅ (works)
+- Attempted configuration: 3 rules × 50 MaxEntries = **150 capacity** ❌ (failed)
+- Error message: `"The following VPC Security Group resources do not have sufficient capacity"`
+
+**Design constraints:**
+
+- With 3 rules referencing a Prefix List: `max_entries` must be ≤ 20 (3 × 20 = 60)
+- With `max_entries = 50`: Can only have 1 rule referencing the Prefix List (1 × 50 = 50)
+- Current setup (3 rules × MaxEntries=10): Balanced configuration with room for growth
+
+**Recommendation:** When designing security groups with Prefix Lists, always ensure `(number of rules) × (max_entries) ≤ 60`
