@@ -230,6 +230,66 @@ terraform apply
 1. `fe22c7e` - Initial commit: Add Terraform project with AWS Prefix List
 2. `7ebbd66` - セキュリティグループをPrefix Listで作成（現在地）
 
+### 5. 新リソースタイプへの実際の移行作業（2025-11-21）
+
+AWS Provider 5.0+の新しいリソースタイプへの移行を実施しました。
+
+#### 作業手順
+
+**ステップ1: 既存ルールの削除**
+
+`security_group.tf`から旧リソースタイプの定義を削除し、terraform applyを実行。
+
+```bash
+terraform plan   # 4つのルール削除を確認
+terraform apply  # 実行
+```
+
+削除されたリソース（旧タイプ）:
+- `aws_security_group_rule.egress_all` - ID: sgrule-235794544
+- `aws_security_group_rule.ingress_from_prefix_list["0"]` - ID: sgrule-2363168827 (HTTPS/443)
+- `aws_security_group_rule.ingress_from_prefix_list["1"]` - ID: sgrule-1817352344 (HTTP/80)
+- `aws_security_group_rule.ingress_from_prefix_list["2"]` - ID: sgrule-3984986704 (SSH/22)
+
+実行結果: `0 added, 0 changed, 4 destroyed`
+
+**ステップ2: 新リソースタイプでの再作成**
+
+`security_group.tf`に新リソースタイプの定義を追加し、terraform applyを実行。
+
+```bash
+terraform plan   # 4つのルール追加を確認
+terraform apply  # 実行
+```
+
+作成されたリソース（新タイプ）:
+- `aws_vpc_security_group_egress_rule.allow_all` - ID: sgr-REDACTED-03
+- `aws_vpc_security_group_ingress_rule.from_prefix_list["0"]` - ID: sgr-REDACTED-04 (HTTPS/443)
+- `aws_vpc_security_group_ingress_rule.from_prefix_list["1"]` - ID: sgr-REDACTED-01 (HTTP/80)
+- `aws_vpc_security_group_ingress_rule.from_prefix_list["2"]` - ID: sgr-REDACTED-02 (SSH/22)
+
+実行結果: `4 added, 0 changed, 0 destroyed`
+
+#### 移行のポイント
+
+- セキュリティグループ本体（`sg-REDACTED-01`）は変更なし
+- ルールのみを削除→再作成することで、無停止での移行が可能
+- 新リソースタイプでは、リソースID形式が `sgrule-*` から `sgr-*` に変更
+- デフォルトタグ（Environment, ManagedBy, Project）が自動適用
+
+#### 現在のリソースID一覧
+
+**AWS リソース:**
+- Prefix List: `pl-REDACTED-01`
+- Security Group: `sg-REDACTED-01`
+- VPC: `vpc-REDACTED-01`
+
+**セキュリティグループルール:**
+- Egress (All): `sgr-REDACTED-03`
+- Ingress (HTTPS/443): `sgr-REDACTED-04`
+- Ingress (HTTP/80): `sgr-REDACTED-01`
+- Ingress (SSH/22): `sgr-REDACTED-02`
+
 ## 今後の拡張案
 
 - [ ] 他の環境（staging, prod）への展開
@@ -238,6 +298,7 @@ terraform apply
 - [ ] セキュリティグループを使用したEC2インスタンスの起動
 - [ ] 複数のセキュリティグループでPrefix Listを共有する構成の検証
 - [ ] セキュリティグループルール数の上限（60）を超える検証
+- [x] AWS Provider 5.0+の新リソースタイプへの移行完了
 
 ## 備考
 
