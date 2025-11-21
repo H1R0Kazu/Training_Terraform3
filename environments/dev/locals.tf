@@ -21,4 +21,26 @@ locals {
       description = "Partner Company (Test IP)"
     }
   ]
+
+  # Security Group Ingress Rules
+  security_group_ingress_rules = [
+    {
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      description = "Allow HTTPS from prefix list IPs"
+    },
+    {
+      from_port   = 80
+      to_port     = 80
+      protocol    = "tcp"
+      description = "Allow HTTP from prefix list IPs"
+    },
+    {
+      from_port   = 22
+      to_port     = 22
+      protocol    = "tcp"
+      description = "Allow SSH from prefix list IPs"
+    }
+  ]
 }

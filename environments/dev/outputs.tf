@@ -17,3 +17,13 @@ output "prefix_list_arn" {
   description = "ARN of the managed prefix list"
   value       = aws_ec2_managed_prefix_list.test_miyata.arn
 }
+
+output "security_group_id" {
+  description = "ID of the security group using prefix list"
+  value       = aws_security_group.test_with_prefix_list.id
+}
+
+output "vpc_id" {
+  description = "ID of the Udemy VPC"
+  value       = data.aws_vpc.udemy.id
+}
